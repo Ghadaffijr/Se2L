@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import DashboardTaskCard from '../components/dashboard/DashboardTaskCard'
 import { dashboardTasks, type TaskRegion } from '../data/settlementTasks'
 import JourneyPhaseTimeline from '../components/dashboard/JourneyPhaseTimeline'
@@ -10,6 +12,7 @@ import {
 import {
     clearSavedJourneyDetails,
     getSavedJourneyDetails,
+    saveJourneyDetails,
     type JourneyDetails,
 } from '../utils/journeyStorage'
 import { calculateCurrentPhase } from '../utils/phaseCalculator'
@@ -43,6 +46,71 @@ const dependantLabels: Record<string, string> = {
     adult: 'Adult dependant',
     children: 'Child dependant',
     both: 'Adult and child dependants',
+}
+
+type NewcomerProfileRow = {
+    visa_type: string
+    arrival_date: string
+    uk_region: string
+    selected_language: string
+    dependant_count: number
+}
+
+function getFrontendVisaType(visaType: string) {
+    const visaTypeMap: Record<string, string> = {
+        'Skilled Worker': 'skilled-worker',
+        Student: 'student',
+        'Spouse / Family': 'spouse-family',
+        Graduate: 'graduate',
+    }
+
+    return visaTypeMap[visaType] ?? 'skilled-worker'
+}
+
+function getFrontendRegion(region: string) {
+    const regionMap: Record<string, string> = {
+        England: 'england',
+        Wales: 'wales',
+        Scotland: 'scotland',
+        'Northern Ireland': 'northern-ireland',
+    }
+
+    return regionMap[region] ?? 'england'
+}
+
+function getFrontendLanguage(language: string) {
+    const languageMap: Record<string, string> = {
+        English: 'english',
+        French: 'french',
+        Arabic: 'arabic',
+        Yoruba: 'yoruba',
+        Igbo: 'igbo',
+        Hausa: 'hausa',
+    }
+
+    return languageMap[language] ?? 'english'
+}
+
+function getFrontendDependants(dependantCount: number) {
+    if (dependantCount <= 0) {
+        return 'none'
+    }
+
+    if (dependantCount === 1) {
+        return 'children'
+    }
+
+    return 'both'
+}
+
+function mapProfileToJourneyDetails(profile: NewcomerProfileRow): JourneyDetails {
+    return {
+        visaType: getFrontendVisaType(profile.visa_type),
+        arrivalDate: profile.arrival_date,
+        region: getFrontendRegion(profile.uk_region),
+        language: getFrontendLanguage(profile.selected_language),
+        dependants: getFrontendDependants(profile.dependant_count),
+    }
 }
 
 const adultDependantTasks = [
@@ -206,16 +274,109 @@ function isTaskAvailableInRegion(
 function DashboardPage() {
     const location = useLocation()
     const navigate = useNavigate()
-    const journeyDetails =
-        (location.state as JourneyDetails | null) ?? getSavedJourneyDetails()
+    const { user, loading: authLoading } = useAuth()
+
+    const localJourneyDetails = useMemo(
+        () =>
+            (location.state as JourneyDetails | null) ??
+            getSavedJourneyDetails(),
+        [location.state],
+    )
+
+    const [backendJourneyDetails, setBackendJourneyDetails] =
+        useState<JourneyDetails | null>(null)
+
+    const [isLoadingJourney, setIsLoadingJourney] = useState(true)
+    const [journeyLoadError, setJourneyLoadError] = useState<string | null>(null)
+
+    const journeyDetails = backendJourneyDetails ?? localJourneyDetails
 
     const [completedTaskIds, setCompletedTaskIds] = useState<string[]>(
         getSavedCompletedTaskIds,
     )
 
     useEffect(() => {
+        let isMounted = true
+
+        async function loadBackendJourneyDetails() {
+            if (authLoading) {
+                return
+            }
+
+            if (!user) {
+                setIsLoadingJourney(false)
+                return
+            }
+
+            setIsLoadingJourney(true)
+            setJourneyLoadError(null)
+
+            const { data, error } = await supabase
+                .from('newcomer_profiles')
+                .select(
+                    'visa_type, arrival_date, uk_region, selected_language, dependant_count',
+                )
+                .eq('user_id', user.id)
+                .maybeSingle()
+
+            if (!isMounted) {
+                return
+            }
+
+            if (error) {
+                console.error('Failed to load dashboard journey:', error.message)
+                setJourneyLoadError(
+                    'We could not load your saved journey. Please try again.',
+                )
+                setBackendJourneyDetails(null)
+                setIsLoadingJourney(false)
+                return
+            }
+
+            if (data) {
+                const mappedJourneyDetails = mapProfileToJourneyDetails(
+                    data as NewcomerProfileRow,
+                )
+
+                setBackendJourneyDetails(mappedJourneyDetails)
+                saveJourneyDetails(mappedJourneyDetails)
+            } else {
+                setBackendJourneyDetails(null)
+            }
+
+            setIsLoadingJourney(false)
+        }
+
+        loadBackendJourneyDetails()
+
+        return () => {
+            isMounted = false
+        }
+    }, [authLoading, user])
+
+    useEffect(() => {
         saveCompletedTaskIds(completedTaskIds)
     }, [completedTaskIds])
+
+    if (authLoading || isLoadingJourney) {
+        return (
+            <section className="mx-auto flex min-h-[70vh] max-w-3xl items-center px-6 py-12">
+                <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+                    <p className="mb-3 inline-flex rounded-full bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700">
+                        Loading journey
+                    </p>
+
+                    <h1 className="text-3xl font-extrabold tracking-tight text-slate-950 md:text-5xl">
+                        Preparing your dashboard.
+                    </h1>
+
+                    <p className="mt-4 text-lg leading-8 text-slate-600">
+                        Please wait while we load your saved settlement journey.
+                    </p>
+                </div>
+            </section>
+        )
+    }
 
     if (!journeyDetails) {
         return (
@@ -235,6 +396,12 @@ function DashboardPage() {
                             dependant information before it can create your settlement
                             dashboard.
                         </p>
+
+                        {journeyLoadError && (
+                            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                                {journeyLoadError}
+                            </p>
+                        )}
 
                         <Link
                             to="/onboarding"
