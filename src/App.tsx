@@ -1,79 +1,121 @@
-import { Route, Routes, Navigate } from 'react-router';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import AppLayout from './components/layout/AppLayout';
+// src/App.tsx
 
-// NOTE: Depending on what the contributor named their folder, 
-// you may need to change this path to './components/auth/ProtectedRoute'
-import ProtectedRoute from './components/layout/ProtectedRoute'; 
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { useAuth } from './context/AuthContext'
+import ProtectedRoute from './components/auth/ProtectedRoute'
+import AppLayout from './components/layout/AppLayout'
+import AppManagerPage from './pages/AppManagerPage'
+import AuthPage from './pages/AuthPage'
+import DashboardPage from './pages/DashboardPage'
+import LandingPage from './pages/LandingPage'
+import NotFoundPage from './pages/NotFoundPage'
+import OnboardingPage from './pages/OnboardingPage'
+import ResourcesPage from './pages/ResourcesPage'
+import SuperAdminPage from './pages/SuperAdminPage'
+import TaskDetailPage from './pages/TaskDetailPage'
 
-import AppManagerPage from './pages/AppManagerPage';
-import DashboardPage from './pages/DashboardPage';
-import LandingPage from './pages/LandingPage';
-import NotFoundPage from './pages/NotFoundPage';
-import OnboardingPage from './pages/OnboardingPage';
-import ResourcesPage from './pages/ResourcesPage';
-import SuperAdminPage from './pages/SuperAdminPage';
-import TaskDetailPage from './pages/TaskDetailPage';
-import AuthPage from './pages/AuthPage';
+type RedirectIfAuthenticatedProps = {
+  children: React.ReactNode
+}
 
-// Helper component to prevent logged-in users from seeing the login page
-const RedirectIfAuthenticated = ({ children }: { children: React.ReactNode }) => {
-  const { session, isLoading } = useAuth();
-  if (isLoading) return null;
-  if (session) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
-};
+function RedirectIfAuthenticated({ children }: RedirectIfAuthenticatedProps) {
+  const { session, loading } = useAuth()
+
+  if (loading) {
+    return null
+  }
+
+  if (session) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <>{children}</>
+}
 
 function App() {
   return (
-    <AuthProvider>
-      <main className="min-h-screen bg-slate-50 text-slate-900">
-        <Routes>
-          {/* Public Routes (Full Screen, No Sidebar) */}
-          <Route path="/" element={<LandingPage />} />
-          <Route 
-            path="/auth" 
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+
+        <Route
+          path="/auth"
+          element={
+            <RedirectIfAuthenticated>
+              <AuthPage />
+            </RedirectIfAuthenticated>
+          }
+        />
+
+        <Route
+          path="/login"
+          element={
+            <RedirectIfAuthenticated>
+              <AuthPage />
+            </RedirectIfAuthenticated>
+          }
+        />
+
+        <Route element={<AppLayout />}>
+          <Route
+            path="/onboarding"
             element={
-              <RedirectIfAuthenticated>
-                <AuthPage />
-              </RedirectIfAuthenticated>
-            } 
+              <ProtectedRoute>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
           />
 
-          {/* Protected Routes (Requires Login) */}
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppLayout />}>
-              <Route path="/onboarding" element={<OnboardingPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/dashboard/tasks/:taskId" element={<TaskDetailPage />} />
-              <Route path="/resources" element={<ResourcesPage />} />
-              
-              {/* Contributor's Role-Protected Routes */}
-              <Route
-                path="/app-manager"
-                element={
-                  <ProtectedRoute allowedRoles={['app_manager', 'super_admin']}>
-                    <AppManagerPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/super-admin"
-                element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
-                    <SuperAdminPage />
-                  </ProtectedRoute>
-                }
-              />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
 
-              {/* 404 Catch-all */}
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Route>
-        </Routes>
-      </main>
-    </AuthProvider>
-  );
+          <Route
+            path="/dashboard/tasks/:taskId"
+            element={
+              <ProtectedRoute>
+                <TaskDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/resources"
+            element={
+              <ProtectedRoute>
+                <ResourcesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/app-manager"
+            element={
+              <ProtectedRoute allowedRoles={['app_manager', 'super_admin']}>
+                <AppManagerPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/super-admin"
+            element={
+              <ProtectedRoute allowedRoles={['super_admin']}>
+                <SuperAdminPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </main>
+  )
 }
 
-export default App;
+export default App
