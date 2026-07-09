@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router'
+import { Link, NavLink } from 'react-router-dom'
 
 const navLinkBaseClass = 'rounded-lg px-3 py-2 transition'
 

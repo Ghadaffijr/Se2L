@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import DashboardTaskCard from '../components/dashboard/DashboardTaskCard'
 import { dashboardTasks, type TaskRegion } from '../data/settlementTasks'
 import JourneyPhaseTimeline from '../components/dashboard/JourneyPhaseTimeline'

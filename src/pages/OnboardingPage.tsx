@@ -1,5 +1,5 @@
 import { type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router-dom'
 import { saveJourneyDetails } from '../utils/journeyStorage'
 
 function OnboardingPage() {
